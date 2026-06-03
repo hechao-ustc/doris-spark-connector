@@ -29,11 +29,37 @@ class DorisWriteBuilder(config: DorisConfig, schema: StructType) extends WriteBu
 
   override def buildForBatch(): BatchWrite = {
     if (isTruncate) {
+      handleOverwrite()
+    }
+    new DorisWrite(config, schema)
+  }
+
+  private def handleOverwrite(): Unit = {
+    if (config.contains(DorisOptions.DORIS_WRITE_OVERWRITE_PARTITIONS)) {
+      val overwritePartitions = config.getValue(DorisOptions.DORIS_WRITE_OVERWRITE_PARTITIONS)
+
+      if (overwritePartitions != null && overwritePartitions.nonEmpty) {
+        val partitionNames = overwritePartitions.split(",").map(_.trim).filter(_.nonEmpty)
+        require(partitionNames.nonEmpty, "doris.write.overwrite.partitions cannot be empty after parsing")
+
+        val client = new DorisFrontendClient(config)
+        val tableIdentifier = config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER)
+
+        partitionNames.foreach { partitionName =>
+          client.truncatePartition(tableIdentifier, partitionName)
+        }
+      } else {
+        // Empty partition list, fallback to full table overwrite
+        val client = new DorisFrontendClient(config)
+        val tableDb = config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER).split("\\.")
+        client.truncateTable(tableDb(0), tableDb(1))
+      }
+    } else {
+      // No partition parameter set, fallback to full table overwrite (preserve original behavior)
       val client = new DorisFrontendClient(config)
       val tableDb = config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER).split("\\.")
       client.truncateTable(tableDb(0), tableDb(1))
     }
-    new DorisWrite(config, schema)
   }
 
   override def buildForStreaming(): StreamingWrite = {

@@ -146,5 +146,11 @@ public class DorisOptions {
 
     public static final ConfigOption<Boolean> DORIS_SINK_HTTP_UTF8_CHARSET = ConfigOptions.name("doris.sink.http-utf8-charset").booleanType().defaultValue(false).withDescription("");
 
+    /**
+     * Specify Doris partition names for overwrite partition operation.
+     * Multiple partitions separated by comma, e.g., "p20240101,p20240102"
+     */
+    public static final ConfigOption<String> DORIS_WRITE_OVERWRITE_PARTITIONS = ConfigOptions.name("doris.write.overwrite.partitions").stringType().withoutDefaultValue().withDescription("Doris partition names for overwrite partition operation, multiple partitions separated by comma");
+
 
 }

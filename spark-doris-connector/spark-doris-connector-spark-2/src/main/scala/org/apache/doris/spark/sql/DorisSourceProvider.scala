@@ -58,7 +58,7 @@ private[sql] class DorisSourceProvider extends DorisSourceRegisterTrait
 
     mode match {
       case SaveMode.Overwrite =>
-        truncateTable(config)
+        handleOverwrite(config)
       case _: SaveMode => // do nothing
     }
 
@@ -88,6 +88,28 @@ private[sql] class DorisSourceProvider extends DorisSourceRegisterTrait
     new DorisStreamLoadSink(sqlContext, DorisConfig.fromMap(Utils.params(parameters, logger).asJava, false))
   }
 
+  private def handleOverwrite(config: DorisConfig): Unit = {
+    if (config.contains(DorisOptions.DORIS_WRITE_OVERWRITE_PARTITIONS)) {
+      val overwritePartitions = config.getValue(DorisOptions.DORIS_WRITE_OVERWRITE_PARTITIONS)
+      
+      if (overwritePartitions != null && overwritePartitions.nonEmpty) {
+        // Partition-level overwrite: truncate specified partitions
+        val partitionNames = overwritePartitions.split(",").map(_.trim).filter(_.nonEmpty)
+        require(partitionNames.nonEmpty, "doris.write.overwrite.partitions cannot be empty after parsing")
+        
+        partitionNames.foreach { partitionName =>
+          truncatePartition(config, partitionName)
+        }
+      } else {
+        // Empty partition list, fallback to full table overwrite
+        truncateTable(config)
+      }
+    } else {
+      // No partition parameter set, fallback to full table overwrite (preserve original behavior)
+      truncateTable(config)
+    }
+  }
+
   private def truncateTable(config: DorisConfig): Unit = {
     val frontend = new DorisFrontendClient(config)
     val queryFunc: Function[Connection, Void] = new Function[Connection, Void]() {
@@ -96,6 +118,20 @@ private[sql] class DorisSourceProvider extends DorisSourceRegisterTrait
         val stmt = conn.createStatement()
         stmt.execute(query)
         logger.info(s"truncate table ${config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER)} success")
+        null
+      }
+    }
+    frontend.queryFrontends(queryFunc)
+  }
+
+  private def truncatePartition(config: DorisConfig, partitionName: String): Unit = {
+    val frontend = new DorisFrontendClient(config)
+    val queryFunc: Function[Connection, Void] = new Function[Connection, Void]() {
+      override def apply(conn: Connection): Void = {
+        val query = s"TRUNCATE TABLE ${config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER)} PARTITION(${partitionName})"
+        val stmt = conn.createStatement()
+        stmt.execute(query)
+        logger.info(s"truncate partition ${partitionName} from table ${config.getValue(DorisOptions.DORIS_TABLE_IDENTIFIER)} success")
         null
       }
     }

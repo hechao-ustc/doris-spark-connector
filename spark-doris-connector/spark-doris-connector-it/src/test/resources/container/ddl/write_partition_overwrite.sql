@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS test_partition_overwrite;
+CREATE TABLE IF NOT EXISTS test_partition_overwrite (
+  id INT,
+  name VARCHAR(256),
+  age INT,
+  dt DATE
+)
+DUPLICATE KEY(id, name, age)
+PARTITION BY RANGE(dt) (
+  PARTITION p20240101 VALUES [('2024-01-01'), ('2024-01-02')),
+  PARTITION p20240102 VALUES [('2024-01-02'), ('2024-01-03')),
+  PARTITION p20240103 VALUES [('2024-01-03'), ('2024-01-04'))
+)
+DISTRIBUTED BY HASH(id) BUCKETS 1
+PROPERTIES ("replication_num" = "1");

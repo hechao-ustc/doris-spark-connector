@@ -390,6 +390,19 @@ public class DorisFrontendClient implements Serializable {
         });
     }
 
+    public void truncatePartition(String tableIdentifier, String partitionName) throws Exception {
+        queryFrontends(conn -> {
+            String sql = "TRUNCATE TABLE " + tableIdentifier + " PARTITION(" + partitionName + ")";
+            try (PreparedStatement preparedStatement = conn.prepareStatement(sql)) {
+                preparedStatement.execute();
+                LOG.info("truncate partition {} from table {} success", partitionName, tableIdentifier);
+                return null;
+            } catch (SQLException e) {
+                throw new RuntimeException("truncate partition failed: " + partitionName, e);
+            }
+        });
+    }
+
     public LoadBalanceList<Frontend> getFrontends() {
         return frontends;
     }
